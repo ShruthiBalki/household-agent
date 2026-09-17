@@ -1,327 +1,130 @@
-# Household Agent --- Project Overview
+# Household Agent — Project Overview
 
-**Last updated:** September 15, 2026\
+**Last updated:** September 17, 2026  
 **Status:** Product definition and design
 
 ## Overview
 
-Household Agent is an AI-powered household-management application
-intended to reduce the mental effort involved in deciding when everyday
-products should be replaced.
+Household Agent is an AI-powered household-management application intended to reduce the mental effort involved in deciding when everyday household products should be replaced.
 
-For many household products, replacement timing is unclear. Useful
-information may be fragmented across manufacturer documentation,
-credible general lifecycle guidance, product age, and product-specific
-circumstances. Users may need to find that information, judge its
-quality, reconcile different forms of guidance, and decide whether an
-item should be replaced.
+Useful replacement information may be fragmented across manufacturer guidance, credible general guidance, product age, product condition, usage, and other product-specific circumstances. Household Agent researches and reasons over that evidence and turns it into a clear, evidence-backed recommendation when the evidence supports one.
 
-Household Agent aims to perform that research and reasoning and turn it
-into a clear, evidence-backed recommendation.
+## V1 Goal
 
-## Problem
+Validate one core workflow before investing in automatic purchase ingestion, persistent household inventory, reminders, or a broader household-management platform:
 
-Many everyday products do not have an obvious expiration date or
-universally applicable replacement schedule.
+> Given basic information about a household product, can the application identify the decision-relevant context, find trustworthy evidence, and produce a useful and defensible replacement recommendation?
 
-Answering a seemingly simple question such as "Should this product be
-replaced?" may require answering several others:
+## V1 Inputs
 
--   What exact product is this?
--   Does the manufacturer provide lifecycle or replacement guidance?
--   If the manufacturer does not provide a usable interval, is there
-    credible general guidance?
--   How old is the product relative to the available guidance?
--   How strong and applicable is the evidence?
--   Is there enough evidence to make a recommendation at all?
+Initial input is intentionally minimal:
 
-This creates recurring research and decision-making work for households.
-Household Agent is intended to reduce that mental load.
+- **Product name** — required
+- **Purchase date** — required
+- **Product link** — optional identification aid
 
-## Target User
+The system may ask targeted follow-up questions about product type, material, coating, condition, usage, or similar context **only when that information materially changes the recommendation**.
 
-The initial target user is a household decision-maker who wants help
-determining when everyday products should be replaced without repeatedly
-researching product lifespans and replacement guidance manually.
+If the product remains too ambiguous after simple user-observable clarification, the system stops rather than guessing.
 
-The product is retailer-agnostic. A product may have been purchased from
-a major retailer, directly from a manufacturer, or through another
-source.
+Purchase date is evidence for age reasoning; it is not automatically first-use date and does not prove physical condition or safety.
 
-## Version One Hypothesis
+## V1 Experience
 
-Version One is a validation release designed to answer one core
-question:
+For each product, the application should:
 
-**Given basic information about a household product and when it was
-purchased, can an AI-powered application produce a useful, trustworthy
-replacement recommendation that reduces the user's research and
-decision-making effort?**
+1. Identify the product/category/material with enough specificity for applicable guidance.
+2. Ask targeted clarification when missing identity or context materially affects the decision.
+3. Determine the appropriate lifecycle/evidence path.
+4. Prefer verified, explicit, applicable manufacturer guidance.
+5. If manufacturer guidance does not directly resolve the decision, search credible general guidance.
+6. Require two credible independent sources for a recommendation based on general guidance.
+7. Preserve source claims faithfully; do not reverse implications or broaden conditional claims.
+8. Reconcile credible conflicts when possible; abstain if a material conflict remains unresolved.
+9. Map known product facts correctly to evidence criteria.
+10. Return a distinct, actionable outcome and explain its evidence basis and uncertainty.
 
-The initial workflow is intentionally manual so that recommendation
-quality can be validated before investing in automatic purchase
-ingestion or a broader household-management system.
+## Lifecycle / Evidence Paths
 
-## Version One Input
+V1 supports:
 
-The user provides:
+- **Explicit expiration:** use the labeled expiration date rather than inventing a schedule from purchase age.
+- **Replacement/lifespan guidance:** reason from applicable manufacturer or corroborated general guidance.
+- **Condition-based guidance:** reason from observable condition when evidence makes condition decision-relevant.
+- **No reliable guidance:** explain why a defensible recommendation cannot be established.
 
--   **Product name** --- required
--   **Purchase date** --- required
--   **Product link** --- optional
+Lifecycle/evidence path is separate from recommendation outcome.
 
-The product link is an identification aid, not the source of truth for
-replacement guidance and not a dependency on any particular retailer.
+## Recommendation Outcomes
 
-If the exact product cannot be identified with sufficient confidence,
-the application should communicate that uncertainty rather than guess.
+V1 distinguishes:
 
-Purchase age is useful evidence for lifecycle reasoning, but it is not
-proof of a product's actual physical condition or safety. Purchase date
-is also not automatically equivalent to first-use date.
+- **Replace**
+- **Not yet**
+- **Condition dependent**
+- **Insufficient evidence**
+- **Unresolved evidence conflict / abstain**
+- **Insufficient product information**
 
-## Version One Experience
+Uncertainty must be tied to the actual gap rather than expressed as a generic confidence disclaimer.
 
-For each submitted product, the application should:
+## Evidence Principles
 
-1.  Identify the product as confidently as possible.
-2.  Determine the appropriate lifecycle path.
-3.  Prefer verified manufacturer guidance when available.
-4.  Continue to credible general guidance when manufacturer guidance
-    does not provide a usable time-based replacement interval.
-5.  Consider the product's age based on the supplied purchase date.
-6.  Produce an actionable replacement recommendation when the evidence
-    supports one.
-7.  Explain the evidence, source basis, assumptions, and uncertainty
-    behind the recommendation.
-8.  Explain specifically when reliable time-based guidance cannot be
-    established.
+- Manufacturer-specific guidance first when verified and directly applicable.
+- A second source is not required when explicit manufacturer guidance directly resolves the decision.
+- General-guidance recommendations require two credible independent sources with compatible applicable claims.
+- Retailers, blogs, or conflicted sources do not count merely because several repeat the same claim.
+- Preserve claim direction, conditions, scope, and limitations.
+- Never infer the reverse of a source claim. For example, “replace if peeling” does not by itself mean “do not replace if not peeling.”
+- Do not invent replacement intervals, safety claims, or false precision.
+- Purchase age is not product condition.
 
-The application should distinguish manufacturer-specific guidance from
-general guidance and should never invent an interval or present
-uncertain evidence as a definitive safety claim.
+## V1 Boundaries
 
-## Lifecycle Concept
+### Included
 
-Products may require different forms of lifecycle reasoning. At a high
-level, Version One supports three conceptual paths.
+- Manual product input
+- Targeted iterative clarification
+- Product/category/material identification sufficient for guidance
+- Manufacturer-first research
+- Credible general-guidance fallback
+- Condition-aware reasoning when materially relevant
+- Evidence conflict handling
+- Evidence-qualified actionable outcomes
+- Source attribution and uncertainty explanation
+- Whole-item lifecycle treatment
 
-### Expiration-based
+### Not included
 
-Some products are governed by an explicit labeled expiration date.
-
-For these products, the application should direct the user to the
-labeled expiration date on the product or packaging rather than
-inventing a replacement schedule from purchase age.
-
-### Replacement/lifespan-based
-
-For products without an explicit expiration date, the application should
-look for verified manufacturer-specific replacement or lifespan guidance
-first.
-
-When manufacturer guidance does not provide a usable time-based
-interval, credible general lifecycle guidance may be used. General
-guidance can support an actionable age-based recommendation, but the
-application must clearly identify that the recommendation is based on
-general rather than manufacturer-specific evidence.
-
-### Insufficient time-based evidence
-
-For some products, reliable time-based guidance may not be available or
-the product may not be identifiable with enough confidence.
-
-The application should communicate the limitation and its reason rather
-than inventing an interval or presenting unsupported certainty.
-
-The technical mechanism used to perform lifecycle routing, product
-identification, retrieval, evidence evaluation, and recommendation
-generation will be determined during requirements and architecture work
-rather than assumed in this overview.
-
-## Recommendation Philosophy
-
-Household Agent is intended to make useful recommendations, not merely
-return research results.
-
-When the available evidence supports it, the application may indicate
-that:
-
--   replacement is not indicated by age;
--   replacement may be worth considering; or
--   replacement is recommended based on age and available guidance.
-
-Recommendations must remain proportional to the evidence.
-
-General lifecycle guidance must not be presented as:
-
--   a manufacturer requirement;
--   an exact expiration date;
--   a safety determination;
--   proof of the item's actual physical condition; or
--   a falsely precise replacement deadline.
-
-If reliable evidence does not support a time-based recommendation, the
-application should say so and explain why.
-
-## Result Experience
-
-The result should lead with a short, decision-oriented takeaway and then
-provide supporting context as applicable:
-
--   product identity;
--   age since purchase;
--   recommendation;
--   manufacturer guidance;
--   credible general guidance;
--   sources;
--   assumptions and uncertainty; and
--   an explanation when a reliable recommendation cannot be established.
-
-Manufacturer-specific guidance and general guidance should remain
-visibly distinct so the user can understand the basis and authority of
-the recommendation.
-
-## Version One Scope
-
-Version One includes:
-
--   manual product entry;
--   retailer-agnostic product handling;
--   product-identification attempts using supplied information;
--   explicit handling of uncertain product identity;
--   lifecycle routing;
--   manufacturer-guidance research;
--   credible general-guidance fallback;
--   age-based reasoning using the original purchase date;
--   actionable, evidence-qualified replacement recommendations;
--   evidence and source presentation;
--   explicit handling of expiration-based products;
--   transparent handling of missing or uncertain guidance; and
--   whole-item lifecycle evaluation rather than component-level
-    schedules.
-
-Version One is intentionally small so that the core recommendation
-workflow can be validated before investing in broader automation.
-
-## Initial Validation Approach
-
-Early product discovery uses a small set of deliberately varied
-household product types to exercise different lifecycle and evidence
-patterns. These include durable reusable products, products where
-general lifecycle guidance may be more useful than manufacturer
-replacement guidance, an explicit-expiration edge case, and a
-multi-component reusable product.
-
-These examples are validation cases rather than a permanent
-supported-category list. Their purpose is to expose requirements,
-uncertainty, evidence-quality issues, and failure modes before
-implementation expands.
-
-## Version One Non-Goals
-
-Version One does **not** currently include:
-
--   automatic retailer order-history retrieval;
--   retailer-specific dependencies in the core recommendation workflow;
--   persistent household inventory;
--   user accounts;
--   saved product history;
--   ongoing replacement reminders;
--   component-level replacement schedules; or
--   a complete household-management platform.
-
-These exclusions keep the initial validation focused. They do not imply
-that the capabilities are permanently out of scope.
-
-## Longer-Term Vision
-
-If the core recommendation workflow proves useful, Household Agent can
-evolve toward a more automated household lifecycle-management system.
-
-Future versions could supplement or replace manual entry with purchase
-information from supported retailers, manufacturers, receipts, email, or
-other purchase records. The method used to acquire product information
-should remain conceptually separate from the core recommendation
-workflow.
-
-Over time, the system could identify products automatically, evaluate
-their expected lifecycle, maintain a household inventory, and surface
-products that may need attention or replacement.
-
-The intended longer-term experience is to minimize recurring manual
-research and product entry while preserving transparent, evidence-based
-recommendations.
+- Automatic retailer purchase-history retrieval
+- Retailer-specific dependency
+- Persistent user accounts
+- Saved household history
+- Ongoing reminders
+- Component-specific lifecycle schedules
+- Full household inventory platform
+- Architecture complexity without a demonstrated requirement
 
 ## Design Principles
 
-**Useful over complex.**\
-Validate a meaningful workflow before expanding the system.
+**Useful over complex.** Validate a meaningful workflow first.  
+**Actionable over informational.** Research should reduce the user's decision burden.  
+**Evidence before certainty.** Recommendations must be proportional to evidence.  
+**Claim fidelity.** Never make a source say more than it says.  
+**Transparent fallback.** Clearly distinguish manufacturer and general guidance.  
+**Graceful abstention.** Stop with a specific reason rather than fabricate an answer.  
+**AI should serve the product, not define it.** Architecture choices must be justified by requirements.
 
-**Actionable over informational.**\
-Research should ultimately help the user make a decision rather than
-simply reproduce information.
+## Current Stage and Next Step
 
-**Evidence before certainty.**\
-Recommendations should reflect the strength and applicability of the
-available evidence.
+Requirements and the initial evaluation suite are now defined. The next step is a cross-document traceability review, followed by architecture and implementation planning.
 
-**Manufacturer guidance first.**\
-Verified exact-product and manufacturer information should take
-precedence over generic lifecycle guidance when available.
+## Related Documents
 
-**Transparent fallback.**\
-When credible general guidance is used, the application should make that
-basis clear.
-
-**No invented precision.**\
-The application should communicate uncertainty rather than manufacture
-unsupported replacement intervals.
-
-**Purchase age is not product condition.**\
-Age can inform a recommendation but does not prove actual condition or
-safety.
-
-**Retailer-independent core.**\
-Retailers are potential sources of product information, not dependencies
-of the recommendation workflow.
-
-**Extensible without premature complexity.**\
-Version One should remain simple while avoiding design choices that
-unnecessarily prevent future ingestion or product evolution.
-
-**AI should serve the product, not define it.**\
-AI-powered capabilities should be used where they improve research,
-reasoning, evidence handling, or user value. Technical mechanisms should
-be selected deliberately during architecture rather than added solely
-because AI is available.
-
-## Current Project Stage
-
-The project is currently in **product definition and design**.
-
-The core workflow has been explored using varied product scenarios
-representing different lifecycle situations. No production application,
-retailer integration, persistent product database, final technology
-stack, or final technical architecture has been selected yet.
-
-The development approach is documentation-first and intended to support
-disciplined AI-assisted engineering. Product decisions and requirements
-will guide evaluation, architecture, implementation planning, coding,
-and testing rather than allowing generated code to implicitly determine
-product behavior.
-
-The next stages are to define Version One requirements and evaluation
-criteria, followed by architecture and implementation planning.
-
-## Related Project Documents
-
--   `decision-log.md` --- accepted decisions, rationale, superseded
-    decisions, and open questions
--   `requirements.md` --- next
--   `evaluation-plan.md` --- planned
--   `architecture.md` --- planned after requirements and evaluation
-    criteria are sufficiently clear
--   `implementation-plan.md` --- planned after architecture
--   `AGENTS.md` --- planned as a concise guide directing AI-assisted
-    development to the project's source-of-truth documentation
+- `project-overview.md`
+- `requirements.md`
+- `evaluation-plan.md`
+- `decision-log.md`
+- `architecture.md` — next after traceability review
+- `implementation-plan.md` — after architecture
+- `AGENTS.md` — future concise entry point for AI-assisted development
