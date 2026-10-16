@@ -1,6 +1,6 @@
 # Household Agent — Decision Log
 
-**Last updated:** September 17, 2026  
+**Last updated:** October 16, 2026  
 **Status:** Active — product definition and design
 
 ## Purpose
@@ -38,7 +38,7 @@ Demonstrate meaningful senior engineering/AI skills without adding unjustified c
 ## V1 Input and Clarification Decisions
 
 ### D-009 — Minimal initial manual input
-Product name and purchase date are required; product link is optional.
+Only product name is required, including generic names such as “pan.” Purchase date, product link, and notes are optional. Do not invent unknown age, material, coating, or condition.
 
 ### D-010 — Product link is an identification aid
 It is not the source of truth for replacement guidance.
@@ -47,13 +47,13 @@ It is not the source of truth for replacement guidance.
 No blanket purchase-age cutoff. Preserve original purchase date.
 
 ### D-012 — Usage frequency is not a mandatory initial input
-It may be requested when it materially affects the recommendation.
+It is optional context; V1 does not request additional details.
 
-### D-013 — Clarification applies to any decision-relevant missing context
-Targeted clarification is not limited to product identity. Ask simple user-observable questions about product type, material, condition, usage, or similar context when the missing information materially changes the decision.
+### D-013 — No follow-up questions in V1
+Do not request additional product identity, material, condition, or usage information. Explain the consequential unknown in the outcome instead.
 
-### D-014 — Stop rather than guess when clarification remains insufficient
-If product identity remains materially ambiguous, return **Insufficient product information**.
+### D-014 — Stop rather than guess when product identity is insufficient
+If the supplied product cannot be identified sufficiently for applicable guidance, return **Insufficient product information**; if credible guidance is conditional on an unknown condition, return **Condition dependent** and explain the trigger.
 
 ## Lifecycle and Evidence Decisions
 
@@ -130,11 +130,31 @@ Every evaluation must map to requirements, and important behavioral requirements
 
 - **Manufacturer-only guidance** → manufacturer-first plus credible general fallback.
 - **General guidance should remain informational only** → actionable evidence-qualified recommendations.
-- **Clarification only for product identity** → clarification for any missing decision-relevant context.
-- **Usage frequency as a possible required input** → not mandatory initially; ask only when materially relevant.
+- **Clarification only for product identity** → later expanded clarification → **no follow-up questions in V1**.
+- **Usage frequency as a possible required input** → optional context; do not ask in V1.
 - **Time-based-only framing** → includes condition-based evidence while preserving explicit-expiration routing.
 - **Generic “insufficient evidence” for all failures** → distinct insufficient product information, insufficient evidence, condition dependent, and unresolved conflict outcomes.
 - **Inferring “not yet” from absence of a manufacturer trigger** → prohibited by claim-fidelity / no-reverse-inference rule.
+
+## Architecture Decisions — October 16, 2026
+
+### D-036 — Two AI agents, sequential pipeline
+V1 runs deterministic input validation → Research Agent → deterministic research schema validator → Decision Agent → deterministic final schema/consistency validator → output. No agent-to-agent feedback loops. Research may perform multiple searches internally.
+
+### D-037 — Deterministic input stage
+Validate and normalize user-provided fields without guessing unspecified product facts. This is code, not an AI agent.
+
+### D-038 — Focused Research Agent
+Retrieve only replacement-relevant claims. Include maintenance or safety information only when it directly establishes a replacement criterion. Search manufacturer guidance first, then credible general guidance when needed. Return structured evidence with source URL, source type, claim, conditions, limitations, and applicability.
+
+### D-039 — Decision Agent owns semantic evaluation
+Assess source credibility, independence, applicability, conflicts, evidence sufficiency, claim fidelity, and select one of six supported outcomes. A single credible general source is insufficient for an actionable general-guidance recommendation. Do not request further research from the Research Agent.
+
+### D-040 — Deterministic validators
+Research validator checks JSON schema, required fields, and types, not factual truth or source credibility. Final validator checks output schema, allowed states, evidence-ID references, and mechanically verifiable consistency; it does not independently judge reasoning quality.
+
+### D-041 — Fail fast on validation failure
+Both validators stop the pipeline and return a controlled system error. No regeneration, retries, or agent feedback loops in V1. Validation errors are distinct from evidence-based abstention.
 
 ## Open Questions for Architecture / Later Validation
 
@@ -147,3 +167,32 @@ Every evaluation must map to requirements, and important behavioral requirements
 - Whether later validation needs a larger benchmark beyond the initial scenario suite.
 - Final technology stack, repository structure, hosting, and UI.
 - Final product name and whether “agent” remains the right product description.
+
+## Contract, Research, and Delivery Decisions — October 16, 2026
+
+### D-042 — Research gathers; Decision assesses
+The Research Agent collects relevant manufacturer-first evidence and faithfully records claims, links, conditions, and applicability. It does not judge credibility or make replacement recommendations. The Decision Agent assesses credibility, independence, conflicts, sufficiency, and final outcome.
+
+### D-043 — Conditional general fallback without a fallback-reason field
+Research checks whether manufacturer guidance clearly addresses the question. If absent, unclear, or not decisively applicable to known input facts, research continues with general guidance. The V1 result need not include a `fallback_reason` field.
+
+### D-044 — Structured claims and referenced decisions
+Research emits an array of traceable claims with stable IDs and URLs; summaries are optional. Decision output references claim IDs rather than repeating all evidence. The application joins referenced claims and sources for the user-facing answer.
+
+### D-045 — Simple uncertainty field
+The Decision Agent provides uncertainty as a plain-language string rather than a nested taxonomy or numeric confidence score.
+
+### D-046 — Deterministic final consistency validation
+The final code validator checks schema, allowed outcomes, claim ID references, and simple outcome/uncertainty consistency. It cannot certify semantic credibility or reasoning correctness.
+
+### D-047 — Research budget and conservative early stopping
+Research has configurable limits on queries/sources (exact values TBD). Stop early only if directly applicable manufacturer guidance clearly resolves the question using known facts; otherwise search general guidance within the budget. Reaching the budget with weak/partial evidence is not a schema error.
+
+### D-048 — Internal, privacy-conscious diagnostics
+Record search count, budget exhaustion, and retrieval errors in temporary test logs, not as mandatory user-facing technical details. Explain meaningful evidence limitations in plain language. Long-term retention is not approved for V1.
+
+### D-049 — Test components before full integration
+Test Research Agent, Decision Agent, and deterministic validators independently using fixtures; then run end-to-end evaluation and regression tests.
+
+### D-050 — Backend/API before minimal web UI
+Implement and verify a simple backend/API first, then add a minimal web interface. Python, FastAPI, and Pydantic are suggestions, not selected technologies.

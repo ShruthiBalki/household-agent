@@ -1,0 +1,87 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "product_name",
+    "research_status",
+    "evidence",
+    "retrieval_errors"
+  ],
+  "properties": {
+    "product_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "research_status": {
+      "enum": [
+        "completed",
+        "partial",
+        "failed"
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim_id",
+          "source_name",
+          "source_type",
+          "source_url",
+          "claim_text",
+          "applicable_product"
+        ],
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_type": {
+            "enum": [
+              "manufacturer",
+              "general",
+              "other"
+            ]
+          },
+          "source_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "claim_text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "applicable_product": {
+            "type": "string",
+            "minLength": 1
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "retrieval_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "research-result"
+}

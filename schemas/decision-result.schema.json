@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "outcome",
+    "explanation",
+    "uncertainty",
+    "used_claim_ids"
+  ],
+  "properties": {
+    "outcome": {
+      "enum": [
+        "Replace",
+        "Not yet",
+        "Condition dependent",
+        "Insufficient evidence",
+        "Insufficient product information",
+        "Unresolved evidence conflict"
+      ]
+    },
+    "explanation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "uncertainty": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "used_claim_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "decision-result"
+}

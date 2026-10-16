@@ -1,6 +1,6 @@
 # Household Agent — Project Overview
 
-**Last updated:** September 17, 2026  
+**Last updated:** October 16, 2026  
 **Status:** Product definition and design
 
 ## Overview
@@ -20,12 +20,11 @@ Validate one core workflow before investing in automatic purchase ingestion, per
 Initial input is intentionally minimal:
 
 - **Product name** — required
-- **Purchase date** — required
+- **Purchase date** — optional
 - **Product link** — optional identification aid
+- **Notes** — optional
 
-The system may ask targeted follow-up questions about product type, material, coating, condition, usage, or similar context **only when that information materially changes the recommendation**.
-
-If the product remains too ambiguous after simple user-observable clarification, the system stops rather than guessing.
+V1 does not ask follow-up questions. Generic names are accepted without assuming a material, coating, or other missing fact. When missing identity prevents applicable research, return **Insufficient product information**. When applicable guidance depends on an unknown condition, return **Condition dependent** and explain the condition.
 
 Purchase date is evidence for age reasoning; it is not automatically first-use date and does not prove physical condition or safety.
 
@@ -34,7 +33,7 @@ Purchase date is evidence for age reasoning; it is not automatically first-use d
 For each product, the application should:
 
 1. Identify the product/category/material with enough specificity for applicable guidance.
-2. Ask targeted clarification when missing identity or context materially affects the decision.
+2. Preserve missing identity or context as unknown rather than asking follow-up questions.
 3. Determine the appropriate lifecycle/evidence path.
 4. Prefer verified, explicit, applicable manufacturer guidance.
 5. If manufacturer guidance does not directly resolve the decision, search credible general guidance.
@@ -84,7 +83,7 @@ Uncertainty must be tied to the actual gap rather than expressed as a generic co
 ### Included
 
 - Manual product input
-- Targeted iterative clarification
+- No-follow-up handling of missing product context
 - Product/category/material identification sufficient for guidance
 - Manufacturer-first research
 - Credible general-guidance fallback
@@ -115,9 +114,17 @@ Uncertainty must be tied to the actual gap rather than expressed as a generic co
 **Graceful abstention.** Stop with a specific reason rather than fabricate an answer.  
 **AI should serve the product, not define it.** Architecture choices must be justified by requirements.
 
+## V1 Architecture Summary
+
+A strictly sequential pipeline uses two AI agents and deterministic validation:
+
+**Input validation (code) → Research Agent (AI) → Research schema validator (code) → Decision Agent (AI) → Final validator (code) → Result.**
+
+Research retrieves only replacement-relevant evidence, including safety or maintenance claims when directly pertinent. The Decision Agent evaluates credibility, independence, applicability, and conflicts and selects an outcome. Validators enforce structure and mechanical consistency, not semantic truth. Both validators fail fast with a controlled system error; there are no feedback loops or regeneration in V1.
+
 ## Current Stage and Next Step
 
-Requirements and the initial evaluation suite are now defined. The next step is a cross-document traceability review, followed by architecture and implementation planning.
+Core V1 architecture decisions are agreed and an architecture draft is available. Next: reconcile the evaluation suite with updated requirements, settle open technology and operational decisions, and prepare implementation planning.
 
 ## Related Documents
 
@@ -125,6 +132,16 @@ Requirements and the initial evaluation suite are now defined. The next step is 
 - `requirements.md`
 - `evaluation-plan.md`
 - `decision-log.md`
-- `architecture.md` — next after traceability review
+- `architecture.md` — draft
 - `implementation-plan.md` — after architecture
 - `AGENTS.md` — future concise entry point for AI-assisted development
+
+## Agreed Contract and Delivery Refinements (October 16, 2026)
+
+- Research gathers structured evidence without deciding source credibility; Decision evaluates evidence and returns a recommendation referencing research claim IDs.
+- Manufacturer research comes first; general research is conditional. The Research Agent stops early only when applicable manufacturer guidance clearly resolves the question based on known facts.
+- Research has a configurable search/source budget; technical budget and retrieval diagnostics remain in temporary testing logs, while user-facing explanations mention meaningful limitations without implementation details.
+- Decision uncertainty is a simple text field. The application assembles full cited evidence from claim IDs for display.
+- Validators are deterministic and fail fast on malformed or mechanically inconsistent outputs; absence of usable evidence instead yields a valid **Insufficient evidence** outcome.
+- Delivery order: independently test components, then end-to-end regression; implement backend/API before a minimal web interface.
+- Technology stack remains open. Python/FastAPI/Pydantic are candidates only.

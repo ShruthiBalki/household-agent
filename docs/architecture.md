@@ -1,99 +1,91 @@
-# Household Product Lifecycle Agent — High-Level Architecture
+# Household Agent — V1 Architecture (Draft)
 
-**Version:** 1.1 (V1 design)  
-**Updated:** 2026-10-13  
-**Status:** Agreed high-level direction; implementation details pending low-level design
+**Date:** October 16, 2026  
+**Status:** Draft for review; technology and operational decisions remain open.
 
-## 1. Purpose and V1 Scope
-Provide evidence-informed guidance on whether a household product should be replaced, retained, checked for expiration, or evaluated conditionally. Explain the decision, why it was reached, and which sources support it, without inventing unknown product facts.
+## Goal
+Provide an evidence-backed replacement recommendation for a household item. Only product name is required; purchase date, product link, and notes are optional. Accept generic product names. Never invent missing product facts or ask follow-up questions in V1.
 
-**In scope:** Manual product entry, source research, manufacturer/general guidance assessment, condition and date-aware decisions, transparent evidence and useful next steps.
+## Sequential pipeline
 
-**Out of scope:** Accounts, automated purchase import, reminders, component-level tracking, and separately deployed microservices.
-
-## 2. Architecture
-
-V1 is a **modular monolith** with **three logical components**. A thin application controller invokes them in sequence; no dedicated orchestrator or standalone Decision Engine is needed.
-
-```mermaid
-flowchart TD
-    U[User] --> F[Simple product form]
-    F --> I[Input Processor]
-    I --> A[Product Assessment Engine]
-    A --> O[Output Engine]
-    O --> U
-    A --> L[LLM provider]
-    A --> M[Manufacturer sources]
-    A --> G[General sources / search]
-    subgraph Assessment internals
-      R[Retrieve] --> V[Verify sources and applicability]
-      V --> S[Summarize distinct conditions]
-      S --> C[Validate claims against evidence]
-      C --> D[Apply decision policy]
-    end
-    A -. internal pipeline .-> R
+```text
+User input
+  → Input validation (deterministic code)
+  → Research Agent (AI)
+  → Research schema validator (deterministic code)
+  → Decision Agent (AI)
+  → Final schema and consistency validator (deterministic code)
+  → Recommendation
 ```
 
-The internal stages are logical steps, not separate services. The LLM supports research interpretation and summarization; its unsupported claims are not accepted as evidence.
+The pipeline is strictly sequential with no inter-agent feedback loops. Research may perform multiple searches within its stage. Both validators fail fast on invalid output, returning a controlled **system error**, not an evidence-based recommendation. No retries or regeneration in V1.
 
-## 3. Components
+## Component responsibilities
 
-### 3.1 Input Processor
-- **UI:** Simple form with **product name (required)**, **purchase date (optional)**, and **notes (optional)**. The UI is not the processor itself.
-- Validate and normalize fields into a structured request. A nonempty broad name such as `pan` is valid.
-- Do not classify product types, infer material/brand/condition, or conduct evidence research. Preserve notes without assuming their meaning.
-- Missing product name produces a validation error. Do not demand extensive up-front clarifications.
+### Input validation (code)
+Validate nonempty product name and types/formats of optional date, link, and notes. Preserve all known facts and unknowns. Never infer material, coating, age, condition, or usage.
 
-### 3.2 Product Assessment Engine
-- Receive product name, optional purchase date, and optional notes. Use all available context to frame the question **whether replacement is appropriate**, but do not treat purchase age alone as a universal replacement rule.
-- Identify likely product category/branches when the name is broad (e.g., `pan`).
-- **Manufacturer-first research:** Look for applicable manufacturer guidance and verify the actual source, claims, and model/product applicability. If applicable manufacturer guidance adequately resolves the question, it can be sufficient; otherwise research credible general guidance.
-- Treat an inaccessible manufacturer page as **unreachable**, not proof that guidance does not exist. Retry a limited number of times (working proposal: up to two retries) before fallback; exact retry policy remains for LLD.
-- If no specific brand/model is known, guidance from multiple manufacturers may inform **general category guidance**, but must not be mislabeled as manufacturer guidance for the user's own item.
-- Use an LLM to summarize evidence while retaining distinct conditions and source attribution. Validate each summarized condition against the retrieved evidence; omit unsupported conditions rather than discarding all supported findings.
-- Apply evidence priority, user notes, purchase date when relevant, explicit expiration criteria, applicability, and conflict/abstention rules **within this same component**.
-- Output a structured **decision, reasoning, evidence references, and relevant notes/uncertainty**. If the facts are unknown, output conditional guidance instead of pretending they are known. If material credible conflicts cannot be reconciled, abstain and explain the conflict.
-- **Important:** A source stating “replace if peeling” does not, by itself, prove “do not replace if not peeling.” Any `Not yet` outcome requires affirmative support from applicable evidence, not merely absence of a trigger.
+### Research Agent (AI)
+Search manufacturer guidance first; if absent, vague, or not directly applicable, continue to credible general guidance. Retrieve only evidence that directly informs replacement, including relevant maintenance or safety criteria. Preserve the exact direction, conditions, scope, and limitations of each claim. Return structured JSON. Do not decide whether the item needs replacement.
 
-### 3.3 Output Engine
-- Present in this order: **Decision → Reasoning → Evidence (source links)**.
-- Show relevant conditions, caveats, and concise notes as needed.
-- When evidence or product information is insufficient, say what is missing and what the user could provide next time.
-- Never change the assessment, invent sources, or independently decide replacement.
+### Research schema validator (code)
+Check required fields, JSON types, evidence IDs, and structural constraints. It does not establish source credibility, URL accessibility, or factual truth.
 
-## 4. Main Flow
-1. User enters product name, optional purchase date and notes in a form.
-2. Input Processor validates and normalizes the fields.
-3. Product Assessment Engine classifies as necessary, researches and verifies evidence, summarizes and validates conditions, then determines the decision using the product context.
-4. Output Engine renders decision, reasoning, evidence links, and any missing-information guidance.
+### Decision Agent (AI)
+Assess source credibility, applicability, independence, claim fidelity, conflicts, and sufficiency. A directly applicable manufacturer claim may resolve the decision alone. Actionable general-guidance recommendations require two credible independent sources with compatible applicable claims. One credible general source alone yields **Insufficient evidence** for an actionable recommendation. Preserve unresolved material conflicts and abstain. Do not infer the reverse of a conditional claim. No research callbacks.
 
-**Ambiguous example:** `pan` is accepted. The assessment may provide separate conditional guidance for stainless steel, ceramic-coated, and cast iron rather than forcing a material-selection question.
+### Final validator (code)
+Check required recommendation fields, one allowed outcome, cited evidence IDs existing in the research result, and mechanically checkable rules. Source-count checks cannot prove genuine independence, credibility, or correctness of reasoning; these remain Decision Agent responsibilities. Fail fast if invalid.
 
-**Condition example:** If guidance says replace upon peeling and the user provides no condition notes, return `Condition dependent — replace if peeling`. If notes mention only light scratches and no peeling, do **not** infer `Not yet` solely from that one-sided instruction; use other applicable evidence to support any firmer outcome.
+## Draft data contracts (proposed, not yet finalized)
 
-## 5. Decision and Evidence Principles
-- Applicable verified manufacturer guidance takes priority over generic guidance; exact applicability matters.
-- Manufacturer guidance can suffice alone when it directly resolves the case. Otherwise fall back to credible general guidance, subject to evidence quality rules.
-- General guidance should be supported by at least two independent credible sources when used to justify a firm recommendation (carried forward from the earlier product decision log).
-- Preserve conditions, scope, source URLs, and any disagreements. Do not majority-vote away irreconcilable conflicts.
-- If no reliable basis exists, return insufficient evidence or unresolved conflict, with an explanation.
-- Distinguish lack of accessible evidence from evidence of absence.
-- No numeric confidence score in V1.
+**Input:** `product_name` (required string); `purchase_date`, `product_link`, `notes` (optional). Missing values remain unknown.
 
-## 6. Illustrative Contracts (not finalized)
-- `ProductRequest`: `productName` (required string), `purchaseDate?`, `notes?`.
-- `AssessmentResult`: `decision`, `reasoning`, `evidence[]` (claims, provenance, URLs, applicability), `notes?`, `uncertainty?`, `missingInformation?`.
-- `UserResponse`: formatted decision, reasoning, cited links, relevant notes/next action.
+**Research output:** `evidence[]` with unique `evidence_id`, `source_url`, `source_type` (manufacturer/general), `claim`, `conditions_or_limitations`, `product_applicability`; optional contextual summary. Research should also represent no findings or retrieval limitations explicitly. Exact JSON schema remains to be finalized.
 
-Final types, enum states, schemas, prompts, search integrations, verification algorithm, and failure behavior belong in LLD.
+**Decision output:** `outcome`, `reasoning`, `evidence_ids`, `source_basis`, `uncertainty`, and `next_action` where useful. Exact JSON schema remains to be finalized.
 
-## 7. Open Design Questions
-- Language, framework, deployment and whether any storage is needed.
-- Date parsing/validation, UI behavior, precise schemas and decision enum.
-- LLM provider, search provider, source authenticity and claim validation mechanisms.
-- Manufacturer applicability criteria; research stopping rules; timeout and retry configuration.
-- Source quality thresholds, conflict-resolution details and safety-sensitive products.
-- Tests, monitoring, privacy, caching and graceful degradation.
+## Supported outcomes
 
-## 8. Architecture Evolution
-Keep the Product Assessment Engine internally structured and testable. Revisit separate deployable services only if an actual reuse or operational need emerges. The previously proposed four-component architecture was **superseded** by the three-component design; see the Architecture Decision Log.
+- **Replace**
+- **Not yet**
+- **Condition dependent** — relevant replacement trigger exists but necessary condition is unknown
+- **Insufficient evidence** — available evidence does not support a defensible recommendation
+- **Unresolved evidence conflict / abstain** — credible material disagreement remains
+- **Insufficient product information** — cannot identify product sufficiently for applicable guidance
+
+Keep lifecycle/evidence path (explicit expiration, lifespan, condition-based, no reliable guidance) separate from outcome. An inaccessible source is an access limitation, not evidence that guidance does not exist. System/validation errors are separate from these six outcomes.
+
+## Output principles
+Lead with outcome, then rationale, manufacturer-versus-general evidence basis, traceable sources, specific uncertainty, and useful next action. Do not use numeric confidence scores in V1.
+
+## Boundaries
+No automatic retailer purchase retrieval, persistent user accounts, saved household history, reminders, component-level lifecycle tracking, or agent feedback loops. Do not invent infrastructure, scale, latency, uptime, or retention targets.
+
+## Open decisions
+1. Finalize research and decision JSON schemas, including empty evidence and retrieval-error representation.
+2. Choose search/retrieval provider and AI model(s); verify manufacturer identity and source accessibility.
+3. Decide orchestration, timeouts, provider failures, logging, and privacy/retention controls.
+4. Select stack, hosting, UI, and repository structure.
+5. Reconcile the existing evaluation suite with revised no-follow-up and optional-purchase-date requirements; test credibility, conflicts, claim fidelity, and validator fail-fast behavior.
+
+## Document alignment
+This draft reflects decisions agreed on October 16, 2026. The updated `decision-log.md`, `project-overview.md`, and `requirements.md` supersede the older September 17 copies for changed input and clarification behavior.
+
+## Accepted contract refinements (October 16, 2026)
+
+**Research Agent:** Collect evidence, not credibility judgments. Search manufacturer guidance first. Only fall back to general evidence if manufacturer guidance is missing or not clearly decisive for the supplied facts. A conservative early stop is permitted only for directly applicable manufacturer guidance that clearly resolves the decision. Respect configurable search-query and source limits; the numeric defaults are TBD. No `fallback_reason` field is required.
+
+**ResearchResult contract (draft, field names not frozen):** `research_status` (completed/limited), `evidence` (array of `{claim_id, source_name, source_type, source_url, claim_text, applicable_product, conditions, summary?}`), and `retrieval_errors` (array). Each claim has a unique ID. The summary is optional. Empty evidence is valid. Source type is an observation, not a credibility verdict. Research may record budget exhaustion internally; it is not mandatory user-facing output.
+
+**DecisionResult contract (draft, field names not frozen):** `outcome` (one of six supported outcomes), `reasoning` (text), `evidence_ids` (array of research claim IDs), `source_basis` (manufacturer/general/mixed/none), `uncertainty` (simple text, empty when none), `next_action` (optional text). The Decision Agent assesses credibility, independence, applicability, conflicts, and sufficiency; it does not duplicate full evidence objects.
+
+**Rendering:** The application joins DecisionResult `evidence_ids` to ResearchResult claims and displays the selected claims and source links alongside the outcome and reasoning. Never display uncited claims as the decision's supporting evidence.
+
+**Final validator:** Deterministically check the schema, allowed outcomes, claim-ID membership, and simple outcome-specific invariants (for example, `insufficient_evidence` requires a nonempty explanation of the limitation). Do not pretend code-based schema checks prove source credibility, semantic correctness, or genuine independence. Validation failure is a controlled system error; valid empty/weak evidence is handled by the Decision Agent as **Insufficient evidence**.
+
+**Diagnostics:** Temporary development/test logs may record number of searches, budget exhaustion, and retrieval/access errors. User-facing text explains only meaningful evidence limitations. Do not commit to permanent storage.
+
+**Testing:** Unit/fixture tests for research extraction, decision reasoning, input/schema validators, and final consistency rules; then integration/API and end-to-end regression tests. Include manufacturer early stop, conditional general fallback, one general source, no findings, budget exhaustion, missing claim ID, and uncertainty consistency.
+
+**Delivery order:** Backend and API first; minimal web UI second. Python + FastAPI + Pydantic are proposed, not selected. Model/retrieval provider, hosting, and numeric research limits remain open.
