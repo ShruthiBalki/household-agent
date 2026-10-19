@@ -5,7 +5,8 @@
     "outcome",
     "explanation",
     "uncertainty",
-    "used_claim_ids"
+    "used_claim_ids",
+    "source_basis"
   ],
   "properties": {
     "outcome": {
@@ -34,6 +35,20 @@
       "items": {
         "type": "string"
       }
+    },
+    "source_basis": {
+      "enum": [
+        "manufacturer",
+        "general",
+        "mixed",
+        "none"
+      ]
+    },
+    "next_action": {
+      "type": [
+        "string",
+        "null"
+      ]
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

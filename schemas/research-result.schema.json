@@ -30,7 +30,8 @@
           "source_type",
           "source_url",
           "claim_text",
-          "applicable_product"
+          "applicable_product",
+          "conditions"
         ],
         "properties": {
           "claim_id": {

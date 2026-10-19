@@ -1,2 +1,8 @@
 .DS_Store
 docs/old*.md
+docs/architecture-tradeoff-decisions.md
+*.scratch
+.env
+.venv/
+__pycache__/
+*.py[cod]

@@ -2,15 +2,15 @@
 
 An AI-assisted application that researches replacement guidance for everyday household products and returns an evidence-backed recommendation—or clearly explains why a defensible recommendation is not possible.
 
-> 🚧 **Status:** V1 design and implementation planning. Architecture and evaluation criteria are documented; implementation technology and model providers are not yet finalized.
-
+> 🚧 **Status:** V1 Impelented
+Household Agent V1 is a stateless FastAPI application that researches household-product replacement guidance and returns one of six evidence-backed outcomes. It keeps research collection separate from decision reasoning, validates both agent boundaries, and never turns malformed model output into a recommendation.
 ## The Problem
 
 Deciding whether to replace a pan, water bottle, or another reusable household item can require finding manufacturer instructions, interpreting condition-based guidance, comparing general sources, and accounting for missing or conflicting information. Household Agent aims to reduce that research and decision-making effort without inventing product facts or replacement schedules.
 
 ## V1 Experience
 
-The user enters a **product name** (required). **Purchase date, product link, and notes** are optional. Generic names such as "pan" are accepted; the system does not guess unknown details or ask follow-up questions in V1.
+The user enters a **product name** (required). **Purchase date, product link, and notes** are optional.
 
 The application returns one of six outcomes:
 
@@ -23,69 +23,83 @@ The application returns one of six outcomes:
 
 The result leads with the outcome and explains the reasoning, the specific uncertainty (if any), and the evidence and source links used. An explicit product expiration date takes precedence over inventing an age-based schedule. Purchase date alone does not prove the item's condition.
 
-## V1 Architecture
+## Requirements
 
-The design uses **two AI agents** separated by deterministic validation steps:
+- Python 3.12+
+- An OpenAI API key for live recommendations
 
-```text
-User input
-    ↓
-Input validation (code)
-    ↓
-Research Agent (AI)
-    ↓
-Research schema validator (code)
-    ↓
-Decision Agent (AI)
-    ↓
-Final schema and consistency validator (code)
-    ↓
-User-facing result (outcome + cited evidence)
+The live implementation uses the Responses API with hosted web search for research and a separate, non-searching decision call. External calls have a configurable timeout and SDK retries are disabled so malformed or failed calls remain observable.
+
+## Setup
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -e '.[test]'
 ```
 
-The pipeline is **strictly sequential**. There are no inter-agent feedback loops, user clarification turns, or automatic regeneration retries in V1. Invalid agent output causes a controlled system error, distinct from a valid **Insufficient evidence** recommendation.
+Set `OPENAI_API_KEY` in `.env` or the process environment. Never commit a real key.
 
-### Research Agent
+Configuration variables:
 
-Collects replacement-relevant evidence, preserving each source's claim, URL, scope, conditions, and limitations. It searches **manufacturer guidance first**, then searches general guidance when manufacturer guidance is missing or not clearly decisive for the supplied facts. It does **not** assess source credibility or decide whether to replace the product.
+- `HOUSEHOLD_AGENT_RESEARCH_MODEL` and `HOUSEHOLD_AGENT_DECISION_MODEL`
+- `HOUSEHOLD_AGENT_PROVIDER_TIMEOUT_SECONDS`
+- `HOUSEHOLD_AGENT_MAX_SEARCH_QUERIES`
+- `HOUSEHOLD_AGENT_MAX_EVIDENCE_SOURCES`
+- `HOUSEHOLD_AGENT_LOG_LEVEL` (`INFO` by default)
 
-Research is bounded by configurable search/source limits (numeric defaults to be decided). Conservative early stopping is allowed only when applicable manufacturer guidance clearly resolves the question. Temporary development logs can capture search counts, budget exhaustion, and retrieval failures without exposing operational details unnecessarily to users.
+The query limit is included in the Research Agent's bounded task; the source limit is also enforced on its returned evidence. Provider-side web-search behavior remains subject to the provider's API.
 
-### Decision Agent
+At `INFO`, logs include raw Research and Decision agent outputs, provider input/output/total token usage, validated outcome/count summaries, and controlled error scenarios. API keys and authorization headers are never logged. Agent outputs can contain product notes or retrieved source text, so production operators should apply appropriate log access and retention controls.
 
-Evaluates credibility, applicability, source independence, conflicts, evidence sufficiency, and the fit between known product facts and source claims. A directly applicable manufacturer claim may be sufficient; an actionable recommendation based on general guidance requires **two credible independent sources** with compatible, applicable claims. The agent must not reverse conditional implications ("replace if peeling" does not establish "not yet" when peeling is absent).
+## Run
 
-The Decision Agent returns the outcome, reasoning, **claim IDs** identifying evidence it relied on, a source-basis label, a **simple text uncertainty field**, and an optional next action. The application joins those IDs to the Research Agent's full evidence records for user-facing citations; the Decision Agent does not duplicate entire evidence objects.
+```bash
+uvicorn household_agent.app:app --reload
+```
 
-### Deterministic Validators
+Open `http://127.0.0.1:8000/` for the minimal UI or POST JSON to `/api/v1/recommendations`:
 
-Validate JSON structure, required fields, allowed outcomes, claim-ID references, and mechanically checkable outcome-specific consistency rules. They **cannot** independently establish whether a source is truthful, credible, or genuinely independent. Valid research with no usable evidence results in **Insufficient evidence**, not a system error.
+```json
+{
+  "product_name": "ceramic nonstick pan",
+  "purchase_date": "2021-06-01",
+  "product_url": null,
+  "notes": "coating is visibly peeling"
+}
+```
 
-The exact JSON schemas are still drafts; see the architecture document for proposed fields and remaining contract decisions.
+Only `product_name` is required. Unknown facts stay unknown, and the application does not ask follow-up questions.
 
-## Design Principles
+## Test
 
-- Evidence before certainty; never invent product characteristics, safety claims, or replacement intervals.
-- Manufacturer-first research, with general guidance fallback when needed.
-- Clear separation between **evidence collection** and **credibility/decision assessment**.
-- Preserve the direction, conditions, and limitations of every source claim.
-- Show supporting evidence and clearly distinguish manufacturer from general guidance.
-- Express specific uncertainty rather than a numerical confidence score.
-- Prefer a small, testable implementation over unnecessary agent-framework complexity.
+```bash
+pytest
+```
 
-## V1 Non-Goals
+Tests use mocked providers and frozen evidence; they never fabricate a successful live-provider response. The suite covers component contracts, provider-call behavior, pipeline ordering, API behavior, evidence joins, and EV-01–EV-25. Live retrieval should be tested separately with a real key because deterministic fixtures cannot verify current source accessibility or model reasoning quality.
 
-V1 excludes automatic retailer purchase-history retrieval, persistent user accounts or inventory, reminders, component-specific replacement schedules, interactive clarification, and multi-agent feedback loops. These may be reconsidered in a later version.
+## Failure semantics
 
-## Engineering and Testing Approach
+- Invalid request input: HTTP 422
+- Malformed research or decision output, including invalid claim references: HTTP 502
+- Provider/research unavailable: HTTP 503
+- Valid empty evidence: a normal `Insufficient evidence` result, not an error
 
-We are following documentation-first, AI-assisted development: requirements and decisions precede implementation, and behavior is checked against explicit evaluation cases.
+The API returns only evidence claims referenced by the validated decision. Validators enforce structure and mechanical consistency; they do not certify factual truth, credibility, independence, or semantic reasoning.
 
-**Testing order:** test research extraction, decision reasoning, and both validators individually; then test API integration and the complete end-to-end workflow. Regression cases cover manufacturer evidence, general-source corroboration, missing information, conflicts, claim fidelity, empty results, search-budget exhaustion, and validation failures.
+## Structure
 
-**Implementation order:** backend/API first, then a minimal web interface.
+- `src/household_agent/contracts.py` — Pydantic contracts
+- `src/household_agent/validation.py` — deterministic boundary validators
+- `src/household_agent/agents.py` — Research and Decision agents/prompts
+- `src/household_agent/provider.py` — provider adapter
+- `src/household_agent/service.py` — sequential orchestration and evidence join
+- `src/household_agent/app.py` — FastAPI routes and minimal UI
+- `schemas/` — language-neutral JSON contracts
+- `tests/` — component, API, and EV regression tests
 
-**Proposed (not finalized) stack:** Python, FastAPI, and Pydantic, using direct model-provider SDK calls and straightforward sequential orchestration. LangChain or LangGraph are **not required for V1**. LangChain may become useful for more complex retrieval integrations; LangGraph may be appropriate later if the workflow gains stateful branches, feedback loops, checkpoints, or human approvals. Model provider, search provider, hosting, and numerical research limits remain open decisions.
+The provider adapter follows the official OpenAI [web search guide](https://developers.openai.com/api/docs/guides/tools-web-search) and [Responses API reference](https://developers.openai.com/api/reference/python/resources/responses/methods/create).
 
 ## Documentation
 
@@ -97,9 +111,3 @@ Detailed design records live in [`docs/`](docs/):
 - [`evaluation-plan.md`](docs/evaluation-plan.md) — acceptance and regression scenarios
 - [`decision-log.md`](docs/decision-log.md) — accepted choices and superseded directions
 - [`implementation-plan.md`](docs/implementation-plan.md) — phased delivery plan
-
-## Current Phase
-
-**Product definition → Requirements → Evaluation → Architecture → Implementation**
-
-V1 is at the **architecture-to-implementation planning** transition. Next: finalize the ResearchResult and DecisionResult JSON contracts, confirm the backend stack, and implement/test the pipeline incrementally.
