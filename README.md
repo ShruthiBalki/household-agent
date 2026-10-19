@@ -2,6 +2,37 @@
 
 An AI-assisted application that researches replacement guidance for everyday household products and returns an evidence-backed recommendation—or clearly explains why a defensible recommendation is not possible.
 
+## Application Demo
+
+![Successful replacement recommendation](assets/Recommendation%20provided.png)
+
+*A successful, evidence-backed recommendation based on the product's reported condition.*
+
+![Household Agent input screen](assets/Introduction%20Home%20Page.png)
+
+*The input screen requires only a product name, with optional context for a more specific recommendation.*
+
+![Insufficient product information result](assets/Insufficient%20Product%20Info.png)
+
+*When product details are too limited, the application explains the uncertainty and suggests a practical next step.*
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A[User input] --> B[Deterministic validation]
+    B --> C[Research agent]
+    C --> D[Decision agent]
+    D --> E[Recommendation]
+```
+
+### Engineering highlights
+
+- Structured outputs at both agent boundaries
+- Deterministic request and response validation
+- Explicit failure handling and abstention paths
+- Automated component, API, and regression testing
+
 > 🚧 **Status:** V1 Impelented
 Household Agent V1 is a stateless FastAPI application that researches household-product replacement guidance and returns one of six evidence-backed outcomes. It keeps research collection separate from decision reasoning, validates both agent boundaries, and never turns malformed model output into a recommendation.
 ## The Problem
